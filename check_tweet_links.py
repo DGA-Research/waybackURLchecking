@@ -32,6 +32,24 @@ def extract_tweet_id(url: str) -> Optional[str]:
     return match.group(1) if match else None
 
 
+def extract_tweet_handle(url: str) -> Optional[str]:
+    """Return the account handle (path segment before /status) if present."""
+    normalized = normalize_input_url(url)
+    if not normalized:
+        return None
+    parsed = urlparse(normalized)
+    parts = [segment for segment in parsed.path.split("/") if segment]
+    if len(parts) >= 2 and parts[1] in {"status", "statuses"}:
+        return parts[0]
+    return None
+
+
+def build_wayback_status_url(tweet_id: str, handle: str) -> str:
+    """Return the Wayback link template for the given tweet."""
+    safe_handle = handle.strip("/")
+    return f"https://web.archive.org/web/{tweet_id}/https://twitter.com/{safe_handle}"
+
+
 def normalize_input_url(raw_url: str) -> Optional[str]:
     """Normalize the incoming tweet URL so it can be used for lookups."""
     if not isinstance(raw_url, str):
@@ -370,6 +388,8 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     for index, url in enumerate(df[args.url_column], start=1):
         tweet_id = extract_tweet_id(url)
+        handle = extract_tweet_handle(url)
+        wayback_url = build_wayback_status_url(tweet_id, handle) if tweet_id and handle else None
         if not tweet_id:
             results.append(
                 {
@@ -380,6 +400,7 @@ def main(argv: Optional[list[str]] = None) -> int:
                     "checked_at": checked_at,
                     "oembed_status": None,
                     "checked_url": None,
+                    "wayback_url": None,
                 }
             )
             continue
@@ -397,6 +418,7 @@ def main(argv: Optional[list[str]] = None) -> int:
                 "checked_at": checked_at,
                 "oembed_status": cache[tweet_id].get("oembed_status"),
                 "checked_url": cache[tweet_id].get("checked_url"),
+                "wayback_url": wayback_url,
             }
         )
 
